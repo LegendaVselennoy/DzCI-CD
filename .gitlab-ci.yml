@@ -1,0 +1,94 @@
+stages:
+  - build
+  - test
+  - deploy
+
+build_job:
+  stage: build
+  script:
+    - echo "Building the project"
+
+test_job:
+  stage: test
+  script:
+    - docker run my-image
+  dependencies:
+    - build_job
+
+deploy_pages:
+  stage: deploy
+  script:
+    - echo "Deploying GitLab Pages"
+  artifacts:
+    paths:
+      - public
+
+pages:
+  stage: deploy
+  script:
+    - echo "Publishing GitLab Pages"
+  artifacts:
+    paths:
+      - public
+  only:
+    - master
+
+
+deploy to preprod:
+  stage: deploy
+  variables:
+    TARGET_ENV: preprod
+    MyLogin: "Preprod ROMAN"
+  script:
+    - echo "Do your deploy here to ${TARGET_ENV}"
+    - echo ${DB_SERVER}
+    - echo "MyLogin"
+    - echo $MyLogin
+    - echo "MyPassword"
+    - echo $MyPassword
+  only:
+    - main
+  environment:
+    name: preprod
+
+deploy to production:
+  stage: deploy
+  variables:
+    TARGET_ENV: production
+    MyLogin: "Production ROMAN"
+  script:
+    - echo "Do your deploy here to ${TARGET_ENV}"
+    - echo ${DB_SERVER}
+    - echo "MyLogin"
+    - echo $MyLogin
+    - echo "MyPassword"
+    - echo $MyPassword
+  only:
+    - main
+  environment:
+    name: production
+
+cancel:
+  stage: stop previous jobs
+  image: everpeace/curl-jq
+  script:
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "main" ]
+        then
+          (
+            echo "Cancel old pipelines from the same branch except last"
+            OLD_PIPELINES=$( curl -s -H "PRIVATE-TOKEN: $RUNNER_TOKEN" "https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/pipelines?ref=${CI_COMMIT_REF_NAME}&status=running" \
+                  | jq '.[] | .id' | tail -n +2 )
+                  for pipeline in ${OLD_PIPELINES}; \
+                      do echo "Killing ${pipeline}" && \
+                        curl -s --request POST -H "PRIVATE-TOKEN: ${RUNNER_TOKEN}" "https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/pipelines/${pipeline}/cancel"; done
+          ) || echo "Canceling old pipelines (${OLD_PIPELINES}) failed"
+      fi     
+
+
+include:
+  - local: local-smoke-tests.gitlab-ci.yml
+
+  - remote: https://gitlab.com/ci-cd7655047/5/-/raw/main/remote-included-file.yml              
+# не устанавливается никак gitlab
+# I can't install it in any way gitlab
